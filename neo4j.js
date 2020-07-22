@@ -16,45 +16,91 @@ class Node{
         this.properties = node.properties
     }
 
+    getPropertiesHTML(){
+        let str_pro = ''
+        for(let key in this.properties){
+            str_pro += `<strong>${key}:</strong> ${this.properties[key]}<br>`
+        }
+        return str_pro
+    }
+
     getObjectVis(){
         return {
             id: this.identity,
             label: this.label,
-            group: this.label
+            group: this.label,
+            title: this.getPropertiesHTML()
         }
+    }
+
+    getId(){
+        return this.identity
     }
 }
 
 class Edge{
     constructor(edge){
+        this.identity = edge.identity.low
         this.node_from = edge.start.low
         this.node_to = edge.end.low
+        this.label = edge.type
+        this.properties = edge.properties
+        console.log(edge)
     }
 
     getObjectVis(){
         return {
             from: this.node_from,
-            to: this.node_to
+            to: this.node_to,
+            // label: this.label,
+            title: this.getPropertiesHTML()
         }
+    }
+
+    getPropertiesHTML(){
+        let str_pro = ''
+        for(let key in this.properties){
+            str_pro += `<strong>${key}:</strong> ${this.properties[key]}<br>`
+        }
+        return str_pro
+    }
+
+    getIdDirection(){
+        return this.node_from + "-" + this.node_to
+    }
+
+    getId(){
+        return this.identity
     }
 }
 
-async function runCypherToNetwork (){
+async function runCypherToNetwork(start=null, end=null){
     let edges = []
     let nodes = []
     const session = driver.session()
     try {
-        const result = await session.run('MATCH (p:Place)<-[r:VISITS]-(p2:Person) return p,r,p2', {})
+        let query = 'match (e:Employee)-[c:CONTACT_WITH]->(e2:Employee) return e,c,e2'
+        if(start && end){
+            query = `match (e:Employee)-[c:CONTACT_WITH]->(e2:Employee) 
+            where c.contact_start > datetime('${start}') and 
+            c.contact_end < datetime('${end}') return e,c,e2`
+        }
+        const result = await session.run(query, {})
+        const history_nodes = {}
+        const history_edges = {}
         for(let record of result.records){
             let els = record._fields
-            for(let el of els){
+            for(let el of els.splice(0,10)){
                 if(isRelationship(el)){
                     let edge = new Edge(el)
                     edges.push(edge.getObjectVis())
                 }
                 else{
                     let node = new Node(el)
-                    nodes.push(node.getObjectVis())
+                    if(!history_nodes[node.getId()]){
+                        history_nodes[node.getId()] = node
+                        nodes.push(node.getObjectVis())
+                    }
                 }
             }
         }
